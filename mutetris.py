@@ -73,8 +73,15 @@ def draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score)
 	# draw the main area
 	for y in range(board_h):
 		for x in range(board_w):
-			ch = board[y*board_w+x] or getpieceblock(piece_type, x-piece_x, y-piece_y, piece_r)
-			buf += ch.value+'#'+ANSI_reset if ch is not None else '.'
+			ch = board[y*board_w+x]
+			if ch:
+				buf += ch.value+' '+ANSI_reset
+			else:
+				ch = getpieceblock(piece_type, x-piece_x, y-piece_y, piece_r)
+				if ch:
+					buf += ch.value+'#'+ANSI_reset
+				else:
+					buf += '.'
 		buf += '\n'
 
 	# draw the next piece
@@ -181,7 +188,7 @@ if __name__ == '__main__':
 				for y in range(board_h):
 					if all(board[y*board_w+x] is not None for x in range(board_w)):
 						board[board_w:(y+1)*board_w] = board[0:y*board_w]
-						board[0:board_w] = None
+						board[0:board_w] = [None] * board_w
 						player_score += board_w * multiplier
 						multiplier += 1
 			# reset the bucket after falling one block
