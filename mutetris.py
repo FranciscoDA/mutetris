@@ -62,8 +62,8 @@ piece_size = lambda piece_type: int(len(piece_type)**0.5)
 
 def draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score):
 	buf = ANSI_clear_all + ANSI_cursor_position(1,1)
-	active_block = '[]'
-	inactive_block = '  '
+	active_block = '\033[38;5;7m[\033[38;5;0m]' + ANSI_reset
+	inactive_block = active_block
 	blank = '  '
 	# draw the main area
 	for y in range(board_h):
