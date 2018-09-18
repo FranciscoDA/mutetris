@@ -67,9 +67,14 @@ piece_size = lambda piece_type: int(len(piece_type)**0.5)
 def draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score):
 	buf = ANSI_cursor_position(1,1)
 	block_width = 2
-	active_block = '\033[38;5;7m[\033[38;5;0m]'
+	active_block = '\033[38;5;7m(\033[38;5;0m)'
 	inactive_block = active_block
 	blank = '  '
+	shadow = '()'
+	shadow_x, shadow_y = piece_x, piece_y
+	while canmove(board, piece_type, shadow_x, shadow_y+1, piece_r):
+		shadow_y += 1
+
 	# draw the main area
 	for y in range(board_h):
 		for x in range(board_w):
@@ -81,7 +86,11 @@ def draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score)
 				if ch:
 					buf += ch.value + active_block + ANSI_reset
 				else:
-					buf += blank
+					ch = getpieceblock(piece_type, x-shadow_x, y-shadow_y, piece_r)
+					if ch:
+						buf += shadow
+					else:
+						buf += blank
 		buf += '|\n'
 
 	# draw the next piece
@@ -142,7 +151,7 @@ def iterpieceblocks(piece_type, piece_r):
 	)
 
 # decrease the input timer multiplicatively for every 100 points
-input_bucket_max = lambda player_score: 0.75 ** (player_score // 100)
+input_bucket_max = lambda player_score: 0.85 ** (player_score // 100)
 
 KEY_LEFT = b'\x1b[D' # left arrow
 KEY_RIGHT = b'\x1b[C' # right arrow
