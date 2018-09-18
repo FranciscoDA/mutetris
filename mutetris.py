@@ -6,21 +6,13 @@ import random
 from enum import Enum
 
 class Col(Enum):
-	red="\033[38;5;9m"
-	grn="\033[38;5;10m"
-	ylw="\033[38;5;11m"
-	blu="\033[38;5;12m"
-	pur="\033[38;5;13m"
-	cyn="\033[38;5;14m"
-	org="\033[38;5;202m"
-
-	bgred="\033[48;5;9m"
-	bggrn="\033[48;5;10m"
-	bgylw="\033[48;5;11m"
-	bgblu="\033[48;5;12m"
-	bgpur="\033[48;5;13m"
-	bgcyn="\033[48;5;14m"
-	bgorg="\033[48;5;202m"
+	red="\033[48;5;9m"
+	grn="\033[48;5;10m"
+	ylw="\033[48;5;11m"
+	blu="\033[48;5;12m"
+	pur="\033[48;5;13m"
+	cyn="\033[48;5;14m"
+	org="\033[48;5;202m"
 
 ANSI_reset = "\033[0m"
 ANSI_clear_all = '\033[2J'
@@ -70,29 +62,32 @@ piece_size = lambda piece_type: int(len(piece_type)**0.5)
 
 def draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score):
 	buf = ANSI_clear_all + ANSI_cursor_position(1,1)
+	active_block = '[]'
+	inactive_block = '  '
+	blank = '  '
 	# draw the main area
 	for y in range(board_h):
 		for x in range(board_w):
 			ch = board[y*board_w+x]
 			if ch:
-				buf += ch.value+' '+ANSI_reset
+				buf += ch.value + inactive_block + ANSI_reset
 			else:
 				ch = getpieceblock(piece_type, x-piece_x, y-piece_y, piece_r)
 				if ch:
-					buf += ch.value+'#'+ANSI_reset
+					buf += ch.value + active_block + ANSI_reset
 				else:
-					buf += '.'
-		buf += '\n'
+					buf += blank
+		buf += '|\n'
 
 	# draw the next piece
-	buf += ANSI_cursor_position(2, board_w + 2)
+	buf += ANSI_cursor_position(2, (board_w+1)*len(blank)+1)
 	buf += 'Next:'
 	for px, py, pblk in iterpieceblocks(piece_next, 0):
 		if pblk is not None:
-			buf += ANSI_cursor_position(3 + py, board_w + 2 + px) + pblk.value+'#'+ANSI_reset
+			buf += ANSI_cursor_position(3 + py, (board_w+1+px) * len(blank)+1) + pblk.value + inactive_block + ANSI_reset
 
 	# draw the score
-	buf += ANSI_cursor_position(12, board_w + 2)
+	buf += ANSI_cursor_position(12, (board_w+1)*len(blank)+1)
 	buf += 'Score: ' + str(player_score)
 	buf += ANSI_cursor_position(board_h+1, 1)
 
@@ -178,7 +173,7 @@ if __name__ == '__main__':
 					break
 				for px, py, pblk in iterpieceblocks(piece_type, piece_r):
 					if pblk is not None:
-						board[(py+piece_y)*board_w+px+piece_x] = Col['bg'+pblk.name]
+						board[(py+piece_y)*board_w+px+piece_x] = pblk
 				piece_type = piece_next
 				piece_sz = int(len(piece_type)**0.5)
 				piece_x, piece_y, piece_r = board_w//2 - piece_sz//2, 0, 0
