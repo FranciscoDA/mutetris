@@ -65,7 +65,6 @@ pieces = [ # all piece types are defined as a square map of objects
 piece_size = lambda piece_type: int(len(piece_type)**0.5)
 
 def draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score):
-	#buf = ANSI_clear_above + ANSI_cursor_position(1,1)
 	buf = ANSI_cursor_position(1,1)
 	block_width = 2
 	active_block = '\033[38;5;7m[\033[38;5;0m]'
@@ -134,6 +133,7 @@ def getpieceblock(piece_type, px, py, piece_r):
 	elif piece_r == 1: return piece_type[(sz-px-1)*sz+py]
 	elif piece_r == 2: return piece_type[(sz-py-1)*sz+(sz-px-1)]
 	else:              return piece_type[px*sz+(sz-py-1)]
+
 def iterpieceblocks(piece_type, piece_r):
 	# iterate all the sub blocks of a piece
 	return (
@@ -149,12 +149,15 @@ KEY_RIGHT = b'\x1b[C' # right arrow
 KEY_DOWN = b'\x1b[B' # down arrow
 KEY_UP = b'\x1b[A' # up arrow
 KEY_QUIT = b'\x1b' # esc
+KEY_SPACEBAR = b' '
 
 if __name__ == '__main__':
+	random.seed(time.time())
 	board = [None for i in range(board_w*board_h)]
 	exit = False
 
 	player_score = 0
+	piece_counter = 1
 	piece_type = random.choice(pieces)
 	piece_sz = int(len(piece_type)**0.5)
 	piece_x, piece_y, piece_r = board_w//2 - piece_sz//2, 0, 0
@@ -176,27 +179,39 @@ if __name__ == '__main__':
 			piece_x += 1
 		elif inp == KEY_UP and canmove(board, piece_type, piece_x, piece_y, (piece_r+1)%4):
 			piece_r = (piece_r+1) % 4
-		elif inp == KEY_DOWN or inp == None:
-			if canmove(board, piece_type, piece_x, piece_y+1, piece_r):
-				piece_y += 1
-			else:
-				if piece_y <= 0:
+		else:
+			max_drop = 0
+			if inp == KEY_DOWN or inp == None:
+				max_drop = 1
+			elif inp == KEY_SPACEBAR:
+				max_drop = board_h
+			for _ in range(max_drop):
+				if canmove(board, piece_type, piece_x, piece_y + 1, piece_r):
+					piece_y += 1
+				else:
+					if piece_y <= 0:
+						exit = True
+					for px, py, pblk in iterpieceblocks(piece_type, piece_r):
+						if pblk is not None:
+							board[(py+piece_y)*board_w+px+piece_x] = pblk
+					piece_type = piece_next
+					piece_sz = int(len(piece_type)**0.5)
+					piece_x, piece_y, piece_r = board_w//2 - piece_sz//2, 0, 0
+					piece_next = random.choice(pieces)
+					piece_counter += 1
+					if piece_counter % 5 == 0:
+						random.seed(time.time())
+					multiplier = 1
+					# check for a complete row and clear it
+					for y in range(board_h):
+						if all(board[y*board_w+x] is not None for x in range(board_w)):
+							board[board_w:(y+1)*board_w] = board[0:y*board_w]
+							board[0:board_w] = [None] * board_w
+							player_score += board_w * multiplier
+							multiplier += 1
 					break
-				for px, py, pblk in iterpieceblocks(piece_type, piece_r):
-					if pblk is not None:
-						board[(py+piece_y)*board_w+px+piece_x] = pblk
-				piece_type = piece_next
-				piece_sz = int(len(piece_type)**0.5)
-				piece_x, piece_y, piece_r = board_w//2 - piece_sz//2, 0, 0
-				piece_next = random.choice(pieces)
-				multiplier = 1
-				# check for a complete row and clear it
-				for y in range(board_h):
-					if all(board[y*board_w+x] is not None for x in range(board_w)):
-						board[board_w:(y+1)*board_w] = board[0:y*board_w]
-						board[0:board_w] = [None] * board_w
-						player_score += board_w * multiplier
-						multiplier += 1
+
 			# reset the bucket after falling one block
-			input_bucket = input_bucket_max(player_score)
+			if max_drop > 0:
+				input_bucket = input_bucket_max(player_score)
 
