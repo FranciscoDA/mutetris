@@ -9,8 +9,8 @@ $ python3 mutetris.py
 ```
 
 ### Gallery
-![screenshot](https://i.imgur.com/fOU6kzo.png)
-
+![screenshot1](https://i.imgur.com/UfiWEFD.png)
+![screenshot2](https://i.imgur.com/z7wHKGv.png)
 ### Requirements
 
  * Python 3
