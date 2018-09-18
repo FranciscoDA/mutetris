@@ -18,6 +18,8 @@ class Col(Enum):
 
 ANSI_reset = "\033[0m"
 ANSI_clear_all = '\033[2J'
+ANSI_clear_above = '\033[0J'
+ANSI_clear_below = '\033[1J'
 ANSI_cursor_position = lambda row,col: '\033[' + str(row) + ';' + str(col) + 'H'
 
 board_w = 10
@@ -63,8 +65,10 @@ pieces = [ # all piece types are defined as a square map of objects
 piece_size = lambda piece_type: int(len(piece_type)**0.5)
 
 def draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score):
-	buf = ANSI_clear_all + ANSI_cursor_position(1,1)
-	active_block = '\033[38;5;7m[\033[38;5;0m]' + ANSI_reset
+	#buf = ANSI_clear_above + ANSI_cursor_position(1,1)
+	buf = ANSI_cursor_position(1,1)
+	block_width = 2
+	active_block = '\033[38;5;7m[\033[38;5;0m]'
 	inactive_block = active_block
 	blank = '  '
 	# draw the main area
@@ -82,14 +86,18 @@ def draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score)
 		buf += '|\n'
 
 	# draw the next piece
-	buf += ANSI_cursor_position(2, (board_w+1)*len(blank)+1)
-	buf += 'Next:'
-	for px, py, pblk in iterpieceblocks(piece_next, 0):
-		if pblk is not None:
-			buf += ANSI_cursor_position(3 + py, (board_w+1+px) * len(blank)+1) + pblk.value + inactive_block + ANSI_reset
+	buf += ANSI_cursor_position(2, (board_w+1)*block_width+1) + 'Next:'
+	for py in range(5):
+		buf += ANSI_cursor_position(3+py, (board_w+1) * block_width + 1)
+		for px in range(5):
+			ch = getpieceblock(piece_next, px, py, 0)
+			if ch is not None:
+				buf += ch.value + active_block + ANSI_reset
+			else:
+				buf += blank
 
 	# draw the score
-	buf += ANSI_cursor_position(12, (board_w+1)*len(blank)+1)
+	buf += ANSI_cursor_position(12, (board_w+1)*block_width+1)
 	buf += 'Score: ' + str(player_score)
 	buf += ANSI_cursor_position(board_h+1, 1)
 
@@ -153,10 +161,11 @@ if __name__ == '__main__':
 	piece_next = random.choice(pieces)
 
 	input_bucket = input_bucket_max(player_score)
+	print(ANSI_clear_all)
 	while not exit:
 		draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score)
 		t = time.time()
-		inp = getinput(input_bucket)
+		inp = getinput(max(0, input_bucket))
 		# deduct the elapsed time from the bucket
 		input_bucket -= time.time() - t
 		if inp == KEY_QUIT:
