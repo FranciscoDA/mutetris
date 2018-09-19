@@ -120,7 +120,7 @@ def getinput(timeout):
 		tty.setraw(sys.stdin.fileno())
 		ready = select.select([sys.stdin], [], [], timeout)
 		if sys.stdin in ready[0]:
-			x = sys.stdin.buffer.read1(4)
+			x = sys.stdin.buffer.read1(-1)
 			return x
 		return None
 	finally:
