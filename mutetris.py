@@ -168,12 +168,11 @@ if __name__ == '__main__':
 	player_score = 0
 	piece_counter = 1
 	piece_type = random.choice(pieces)
-	piece_sz = int(len(piece_type)**0.5)
-	piece_x, piece_y, piece_r = board_w//2 - piece_sz//2, 0, 0
+	piece_x, piece_y, piece_r = board_w//2 - piece_size(piece_type)//2, 0, 0
 	piece_next = random.choice(pieces)
 
 	input_bucket = input_bucket_max(player_score)
-	print(ANSI_clear_all)
+	print(ANSI_clear_all, flush=True)
 	while not exit:
 		draw(board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score)
 		t = time.time()
@@ -186,8 +185,12 @@ if __name__ == '__main__':
 			piece_x -= 1
 		elif inp == KEY_RIGHT and canmove(board, piece_type, piece_x+1, piece_y, piece_r):
 			piece_x += 1
-		elif inp == KEY_UP and canmove(board, piece_type, piece_x, piece_y, (piece_r+1)%4):
-			piece_r = (piece_r+1) % 4
+		elif inp == KEY_UP:
+			for x in [0, -1, 1]:
+				if canmove(board, piece_type, piece_x+x, piece_y, (piece_r+1)%4):
+					piece_r = (piece_r+1) % 4
+					piece_x += x
+					break
 		else:
 			max_drop = 0
 			if inp == KEY_DOWN or inp == None:
@@ -204,8 +207,7 @@ if __name__ == '__main__':
 						if pblk is not None:
 							board[(py+piece_y)*board_w+px+piece_x] = pblk
 					piece_type = piece_next
-					piece_sz = int(len(piece_type)**0.5)
-					piece_x, piece_y, piece_r = board_w//2 - piece_sz//2, 0, 0
+					piece_x, piece_y, piece_r = board_w//2 - piece_size(piece_type)//2, 0, 0
 					piece_next = random.choice(pieces)
 					piece_counter += 1
 					if piece_counter % 5 == 0:
