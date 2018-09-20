@@ -3,6 +3,7 @@
 import time
 import random
 import curses
+import curses.ascii
 from enum import Enum
 
 palette = [curses.COLOR_WHITE, curses.COLOR_BLACK, 10, 220, 12, 13, 14, 9, 202]
@@ -147,8 +148,18 @@ def iterpieceblocks(piece_type, piece_r):
 # decrease the input timer multiplicatively for every 100 points
 input_bucket_max = lambda player_score: 0.85 ** (player_score // 100)
 
-KEY_SPACEBAR = 32
-KEY_ESC = 27
+class Controls:
+	SOFTDROP = curses.KEY_DOWN
+	LEFT = curses.KEY_LEFT
+	RIGHT = curses.KEY_RIGHT
+	ROTATE = curses.KEY_UP
+	HARDDROP = curses.ascii.SP
+	EXIT = curses.ascii.ESC
+	PAUSE = ord('p')
+
+def draw_message(stdscr, board, msg):
+	stdscr.addstr(board.h * tile_height // 2, board.w * tile_width // 2 - len(msg) // 2, msg)
+
 def main(stdscr):
 	random.seed(time.time())
 	board = Board(10, 20)
@@ -174,13 +185,18 @@ def main(stdscr):
 		inp = stdscr.getch()
 		# deduct the elapsed time from the bucket
 		input_bucket -= time.time() - t
-		if inp == KEY_ESC:
+		if inp == Controls.EXIT:
 			exit = True
-		elif inp == curses.KEY_LEFT and canmove(board, piece_type, piece_x-1, piece_y, piece_r):
+		elif inp == Controls.PAUSE:
+			draw_message(stdscr, board, 'Paused')
+			stdscr.timeout(-1)
+			while stdscr.getch() != Controls.PAUSE:
+				pass
+		elif inp == Controls.LEFT and canmove(board, piece_type, piece_x-1, piece_y, piece_r):
 			piece_x -= 1
-		elif inp == curses.KEY_RIGHT and canmove(board, piece_type, piece_x+1, piece_y, piece_r):
+		elif inp == Controls.RIGHT and canmove(board, piece_type, piece_x+1, piece_y, piece_r):
 			piece_x += 1
-		elif inp == curses.KEY_UP:
+		elif inp == Controls.ROTATE:
 			for x in [0, -1, 1]:
 				if canmove(board, piece_type, piece_x+x, piece_y, (piece_r+1)%4):
 					piece_r = (piece_r+1) % 4
@@ -188,9 +204,9 @@ def main(stdscr):
 					break
 		else:
 			max_drop = 0
-			if inp == curses.KEY_DOWN or inp == -1:
+			if inp == Controls.SOFTDROP or inp == -1:
 				max_drop = 1
-			elif inp == KEY_SPACEBAR:
+			elif inp == Controls.HARDDROP:
 				max_drop = board.h + piece_h
 			for _ in range(max_drop):
 				if canmove(board, piece_type, piece_x, piece_y + 1, piece_r):
@@ -199,10 +215,9 @@ def main(stdscr):
 					for px, py, pblk in iterpieceblocks(piece_type, piece_r):
 						if pblk is not None:
 							if py+piece_y < 0:
-								msg = 'Game Over'
-								stdscr.addstr(board.h * tile_height // 2, board.w * tile_width // 2 - len(msg) // 2, msg)
+								draw_message(stdscr, board, 'Game Over')
 								stdscr.timeout(-1)
-								while stdscr.getch() != KEY_ESC:
+								while stdscr.getch() != Controls.EXIT:
 									pass
 								exit = True # game over
 								break
