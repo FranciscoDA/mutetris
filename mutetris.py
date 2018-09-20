@@ -169,6 +169,7 @@ def main(stdscr):
 	for fg in Col:
 		for bg in Col:
 			curses.init_pair(fg.value*len(palette)+bg.value+1, palette[fg.value], palette[bg.value])
+	curses.curs_set(0)
 
 	player_score = 0
 	piece_counter = 1
