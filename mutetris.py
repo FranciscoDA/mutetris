@@ -7,20 +7,31 @@ import curses.ascii
 from enum import Enum
 
 palette = [curses.COLOR_WHITE, curses.COLOR_BLACK, 10, 220, 12, 13, 14, 9, 202]
-class Col(Enum):
-	wht = 0
-	blk = 1
-	grn = 2
-	ylw = 3
-	blu = 4
-	pur = 5
-	cyn = 6
+class Colors(Enum):
+	white = 0
+	black = 1
+	green = 2
+	yellow = 3
+	blue = 4
+	purple = 5
+	cyan = 6
 	red = 7
-	org = 8
+	orange = 8
 
 def mkcol(fg, bg):
-	x = curses.color_pair(fg.value * len(palette) + bg.value + 1)
-	return x
+	if fg is not None and bg is not None:
+		return curses.color_pair(fg.value * len(palette) + bg.value + 1)
+	return 0
+
+block_w = 2
+block_h = 1
+def draw_block(stdscr, x, y, bgcol, s='()', fg=[Colors.white, Colors.black]):
+	try:
+		for xpos, (ch, fgcol) in enumerate(zip(s, fg), start=x):
+			stdscr.addstr(y, xpos, ch, mkcol(fgcol, bgcol))
+	except:
+		pass
+
 
 class Board:
 	def __init__(self, w, h):
@@ -38,112 +49,102 @@ class Board:
 		self.data[self.w:(y+1)*self.w] = self.data[0:y*self.w]
 		self.data[0:self.w] = [None] * self.w
 
-pieces = [ # all piece types are defined as a square map of objects
-	[
-		Col.red,
-		Col.red,
-		Col.red,
-		Col.red,
-	],
-	[
-		Col.ylw, Col.ylw,
-		Col.ylw, None,
-		Col.ylw, None,
-	],
-	[
-		Col.pur, Col.pur,
-		None,    Col.pur,
-		None,    Col.pur,
-	],
-	[
-		Col.blu, Col.blu,
-		Col.blu, Col.blu,
-	],
-	[
-		None,    Col.grn, None,
-		Col.grn, Col.grn, Col.grn,
-	],
-	[
-		None,    Col.cyn, Col.cyn,
-		Col.cyn, Col.cyn, None,
-	],
-	[
-		Col.org, Col.org, None,
-		None,    Col.org, Col.org,
-	],
-]
-piece_size = [(4, 1), (3, 2), (3, 2), (2,2), (2,3), (2,3), (2, 3)]
 
-tile_width = 2
-tile_height = 1
-def draw(stdscr, board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score):
+	def draw(self, stdscr, off_x, off_y):
+		for x, y, bg in self:
+			if bg is not None:
+				draw_block(stdscr, x*block_w+off_x, y*block_h+off_y, bg)
+	def draw_message(self, stdscr, off_x, off_y, lines):
+		for y,l in enumerate(lines):
+			try:
+				stdscr.addstr((self.h*block_h - len(lines)) // 2+y, (self.w*block_w-len(l)) // 2, l)
+			except:
+				pass
+
+	def __iter__(self):
+		for y in range(self.h):
+			for x in range(self.w):
+				yield x, y, self.data[y*self.w+x]
+
+class PieceType:
+	def __init__(self, w, h, col, data):
+		self.w, self.h, self.col, self.data = w, h, col, data
+	def __iter__(self):
+		for y in range(self.h):
+			for x in range(self.w):
+				if self.data[y*self.w+x]:
+					yield x, y
+class Piece:
+	def __init__(self, piece_type, x, y, r):
+		self.piece_type, self.x, self.y, self.r = piece_type, x, y, r
+	def __iter__(self):
+		for x, y in self.piece_type:
+			if self.r%2 == 1: x, y = y, x
+			if 1 <= self.r <= 2: y = self.piece_type.h-1-y
+			if 2 <= self.r <= 3: x = self.piece_type.w-1-x
+			yield self.x+x, self.y+y
+
+pieces = [
+	PieceType(1, 4, Colors.red, [
+		True,
+		True,
+		True,
+		True
+	]),
+	PieceType(2, 3, Colors.purple, [
+		True, True,
+		False, True,
+		False, True
+	]),
+	PieceType(2, 3, Colors.yellow, [
+		True, True,
+		True, False,
+		True, False
+	]),
+	PieceType(2, 2, Colors.blue, [
+		True, True,
+		True, True
+	]),
+	PieceType(3, 2, Colors.green, [
+		False, True, False,
+		True, True, True
+	]),
+	PieceType(3, 2, Colors.cyan, [
+		False, True, True,
+		True, True, False
+	]),
+	PieceType(3, 2, Colors.orange, [
+		True, True, False,
+		False, True, True
+	]),
+]
+
+def draw(stdscr, board, piece_current, piece_next, player_score):
 	stdscr.erase()
-	active_block = '()'
-	active_block_fg = [Col.wht, Col.blk]
-	inactive_block = active_block
-	inactive_block_fg = active_block_fg
-	shadow = '()'
-	shadow_fg = active_block_fg
-	shadow_x, shadow_y = piece_x, piece_y
-	while canmove(board, piece_type, shadow_x, shadow_y+1, piece_r):
+	shadow_x, shadow_y = piece_current.x, piece_current.y
+	while canplace(board, piece_current.piece_type, shadow_x, shadow_y+1, piece_current.r):
 		shadow_y += 1
 
 	# draw the main area
-	for y in range(board.h):
-		for x in range(board.w):
-			bg = board.get(x, y)
-			if bg is not None:
-				for x0, (ch, fg) in enumerate(zip(inactive_block, inactive_block_fg)):
-					stdscr.addstr(y*tile_height, x*tile_width+x0, ch, mkcol(fg, bg))
-	for x, y, bg in iterpieceblocks(piece_type, piece_r):
-		for x0, (ch, fg) in enumerate(zip(shadow, shadow_fg)):
-			try:
-				stdscr.addch((y+shadow_y)*tile_height, (x+piece_x)*tile_width+x0, ch)
-			except:
-				pass
-		for x0, (ch, fg) in enumerate(zip(active_block, active_block_fg)):
-			try:
-				stdscr.addstr((y+piece_y)*tile_height, (x+piece_x)*tile_width+x0, ch, mkcol(fg, bg))
-			except:
-				pass
+	board.draw(stdscr, 0, 0)
+	for x, y in Piece(piece_current.piece_type, shadow_x, shadow_y, piece_current.r):
+		draw_block(stdscr, x*block_w, y*block_h, None)
+	for x, y in piece_current:
+		draw_block(stdscr, x*block_w, y*block_h, piece_current.piece_type.col)
 
-	stdscr.addstr(3, board.w*tile_width+2, 'Next:')
-	for x, y, bg in iterpieceblocks(piece_next, 0):
-		for x0, (ch, fg) in enumerate(zip(active_block, active_block_fg)):
-			stdscr.addstr(3+y*tile_height+1, (board.w+x)*tile_width+x0+2, ch, mkcol(fg, bg))
+	stdscr.addstr(3, board.w*block_w+2, 'Next:')
+	for x, y in piece_next:
+		draw_block(stdscr, board.w * block_w + 2 + x * block_w, 4 + y * block_h, piece_next.col)
 
-	stdscr.addstr(12, board.w*tile_width+2, 'Score: ' + str(player_score))
-	stdscr.vline(0, board.w*tile_width, '|', board.h*tile_height)
-	stdscr.hline(board.h*tile_height, 0, '-', board.w*tile_width)
+	stdscr.addstr(12, board.w*block_w+2, 'Score: ' + str(player_score))
+	stdscr.vline(0, board.w*block_w, '|', board.h*block_h)
+	stdscr.hline(board.h*block_h, 0, '-', board.w*block_w)
 
-def canmove(board, piece_type, piece_x, piece_y, piece_r):
+def canplace(board, piece_type, x, y, r):
 	return all(
-		pblk is None or 0 <= px+piece_x < board.w and py+piece_y < board.h and board.get(px+piece_x, py+piece_y) is None
-		for px, py, pblk in iterpieceblocks(piece_type, piece_r)
+		0 <= px < board.w and py < board.h and board.get(px, py) is None
+		for px, py in Piece(piece_type, x, y, r)
 	)
-
-def getpieceblock(piece_type, px, py, piece_r):
-	# get a block inside a (possibly rotated) piece from
-	# the px,py coordinates, which are relative to the top-left of the piece
-	piece_h, piece_w = piece_size[piece_type]
-	if piece_r%2 == 1: px, py = py, px
-	if 1 <= piece_r <= 2: py = piece_h-1-py
-	if 2 <= piece_r <= 3: px = piece_w-1-px
-
-	if px < 0 or px >= piece_w or py < 0 or py >= piece_h:
-		return None
-	else:
-		return pieces[piece_type][py*piece_w+px]
-
-def iterpieceblocks(piece_type, piece_r):
-	# iterate all the sub blocks of a piece
-	piece_h, piece_w = piece_size[piece_type]
-	if piece_r%2 == 1: piece_h, piece_w = piece_w, piece_h
-	for py in range(piece_h):
-		for px in range(piece_w):
-			blk = getpieceblock(piece_type, px, py, piece_r)
-			if blk != None:
-				yield (px, py, blk)
 
 # decrease the input timer multiplicatively for every 100 points
 input_bucket_max = lambda player_score: 0.85 ** (player_score // 100)
@@ -157,8 +158,7 @@ class Controls:
 	EXIT = curses.ascii.ESC
 	PAUSE = ord('p')
 
-def draw_message(stdscr, board, msg):
-	stdscr.addstr(board.h * tile_height // 2, board.w * tile_width // 2 - len(msg) // 2, msg)
+
 
 def main(stdscr):
 	random.seed(time.time())
@@ -166,21 +166,22 @@ def main(stdscr):
 	exit = False
 	curses.start_color()
 	curses.use_default_colors()
-	for fg in Col:
-		for bg in Col:
+	for fg in Colors:
+		for bg in Colors:
 			curses.init_pair(fg.value*len(palette)+bg.value+1, palette[fg.value], palette[bg.value])
 	curses.curs_set(0)
 
 	player_score = 0
 	piece_counter = 1
-	piece_type = random.randrange(len(pieces))
-	piece_h, piece_w = piece_size[piece_type]
-	piece_x, piece_y, piece_r = board.w//2 - piece_w//2, 1-piece_h, 0
-	piece_next = random.randrange(len(pieces))
+
+	piece_current = Piece(random.choice(pieces), board.w//2, 1, 0)
+	piece_current.x -= piece_current.piece_type.w//2
+	piece_current.y -= piece_current.piece_type.h
+	piece_next = random.choice(pieces)
 
 	input_bucket = input_bucket_max(player_score)
 	while not exit:
-		draw(stdscr, board, piece_type, piece_x, piece_y, piece_r, piece_next, player_score)
+		draw(stdscr, board, piece_current, piece_next, player_score)
 		t = time.time()
 		stdscr.timeout(max(0, int(input_bucket*1000)))
 		inp = stdscr.getch()
@@ -189,46 +190,43 @@ def main(stdscr):
 		if inp == Controls.EXIT:
 			exit = True
 		elif inp == Controls.PAUSE:
-			draw_message(stdscr, board, 'Paused')
+			board.draw_message(stdscr, 0, 0, ['Paused', 'P to unpause'])
 			stdscr.timeout(-1)
 			while stdscr.getch() != Controls.PAUSE:
 				pass
-		elif inp == Controls.LEFT and canmove(board, piece_type, piece_x-1, piece_y, piece_r):
-			piece_x -= 1
-		elif inp == Controls.RIGHT and canmove(board, piece_type, piece_x+1, piece_y, piece_r):
-			piece_x += 1
+		elif inp == Controls.LEFT and canplace(board, piece_current.piece_type, piece_current.x-1, piece_current.y, piece_current.r):
+			piece_current.x -= 1
+		elif inp == Controls.RIGHT and canplace(board, piece_current.piece_type, piece_current.x+1, piece_current.y, piece_current.r):
+			piece_current.x += 1
 		elif inp == Controls.ROTATE:
-			for x in [0, -1, 1]:
-				if canmove(board, piece_type, piece_x+x, piece_y, (piece_r+1)%4):
-					piece_r = (piece_r+1) % 4
-					piece_x += x
+			for x in [0, -1, -2]:
+				if canplace(board, piece_current.piece_type, piece_current.x+x, piece_current.y, (piece_current.r+1)%4):
+					piece_current.r = (piece_current.r+1) % 4
+					piece_current.x += x
 					break
 		else:
 			max_drop = 0
 			if inp == Controls.SOFTDROP or inp == -1:
 				max_drop = 1
 			elif inp == Controls.HARDDROP:
-				max_drop = board.h + piece_h
+				max_drop = board.h + piece_current.piece_type.h
 			for _ in range(max_drop):
-				if canmove(board, piece_type, piece_x, piece_y + 1, piece_r):
-					piece_y += 1
+				if canplace(board, piece_current.piece_type, piece_current.x, piece_current.y + 1, piece_current.r):
+					piece_current.y += 1
 				else:
-					for px, py, pblk in iterpieceblocks(piece_type, piece_r):
-						if pblk is not None:
-							if py+piece_y < 0:
-								draw_message(stdscr, board, 'Game Over')
-								stdscr.timeout(-1)
-								while stdscr.getch() != Controls.EXIT:
-									pass
-								exit = True # game over
-								break
-							board.set(px+piece_x, py+piece_y, pblk)
-					piece_type = piece_next
-					piece_h, piece_w = piece_size[piece_type]
-					piece_x, piece_y, piece_r = board.w//2 - piece_w//2, 1-piece_h, 0
-					piece_next = random.randrange(len(pieces))
+					for px, py in piece_current:
+						if py < 0:
+							board.draw_message(stdscr, 0, 0, ['Game Over', 'Esc to quit'])
+							stdscr.timeout(-1)
+							while stdscr.getch() != Controls.EXIT:
+								pass
+							exit = True # game over
+							break
+						board.set(px, py, piece_current.piece_type.col)
+					piece_current = Piece(piece_next, board.w//2 - piece_next.w//2, 1-piece_next.h, 0)
+					piece_next = random.choice(pieces)
 					piece_counter += 1
-					if piece_counter % 5 == 0:
+					if piece_counter % 8 == 0:
 						random.seed(time.time())
 					multiplier = 1
 					# check for a complete row and clear it
