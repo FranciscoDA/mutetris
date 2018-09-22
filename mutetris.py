@@ -239,6 +239,9 @@ def main(stdscr):
 			# reset the bucket after falling one block
 			if max_drop > 0:
 				input_bucket = input_bucket_max(player_score)
+	return player_score
 
 if __name__ == '__main__':
-	curses.wrapper(main)
+	player_score = curses.wrapper(main)
+	print('Game Over')
+	print('Final score: ' + str(player_score))
