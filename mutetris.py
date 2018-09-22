@@ -4,6 +4,7 @@ import time
 import random
 import curses
 import curses.ascii
+from math import floor
 from enum import Enum
 
 palette = [curses.COLOR_WHITE, curses.COLOR_BLACK, 10, 220, 12, 13, 14, 9, 202]
@@ -31,7 +32,6 @@ def draw_block(stdscr, x, y, bgcol, s='()', fg=[Colors.white, Colors.black]):
 			stdscr.addstr(y, xpos, ch, mkcol(fgcol, bgcol))
 	except:
 		pass
-
 
 class Board:
 	def __init__(self, w, h):
@@ -67,8 +67,9 @@ class Board:
 				yield x, y, self.data[y*self.w+x]
 
 class PieceType:
-	def __init__(self, w, h, col, data):
-		self.w, self.h, self.col, self.data = w, h, col, data
+	def __init__(self, w, h, cx, cy, col, data):
+		self.w, self.h, self.cx, self.cy = w, h, cx, cy
+		self.col, self.data = col, data
 	def __iter__(self):
 		for y in range(self.h):
 			for x in range(self.w):
@@ -78,42 +79,42 @@ class Piece:
 	def __init__(self, piece_type, x, y, r):
 		self.piece_type, self.x, self.y, self.r = piece_type, x, y, r
 	def __iter__(self):
+		rotmat = [[1, 0, 0, 1], [0, -1, 1, 0], [-1, 0, 0, -1], [0, 1, -1, 0]][self.r]
 		for x, y in self.piece_type:
-			if self.r%2 == 1: x, y = y, x
-			if 1 <= self.r <= 2: y = self.piece_type.h-1-y
-			if 2 <= self.r <= 3: x = self.piece_type.w-1-x
-			yield self.x+x, self.y+y
+			x -= self.piece_type.cx
+			y -= self.piece_type.cy
+			yield floor(self.x+x*rotmat[0]+y*rotmat[1]), floor(self.y+x*rotmat[2]+y*rotmat[3])
 
 pieces = [
-	PieceType(1, 4, Colors.red, [
+	PieceType(1, 4, 0, 2, Colors.red, [
 		True,
 		True,
 		True,
 		True
 	]),
-	PieceType(2, 3, Colors.purple, [
+	PieceType(2, 3, 1, 1, Colors.purple, [
 		True, True,
 		False, True,
 		False, True
 	]),
-	PieceType(2, 3, Colors.yellow, [
+	PieceType(2, 3, 0, 1, Colors.yellow, [
 		True, True,
 		True, False,
 		True, False
 	]),
-	PieceType(2, 2, Colors.blue, [
+	PieceType(2, 2, 0.5, 0.5, Colors.blue, [
 		True, True,
 		True, True
 	]),
-	PieceType(3, 2, Colors.green, [
+	PieceType(3, 2, 1, 1, Colors.green, [
 		False, True, False,
 		True, True, True
 	]),
-	PieceType(3, 2, Colors.cyan, [
+	PieceType(3, 2, 1, 1, Colors.cyan, [
 		False, True, True,
 		True, True, False
 	]),
-	PieceType(3, 2, Colors.orange, [
+	PieceType(3, 2, 1, 1, Colors.orange, [
 		True, True, False,
 		False, True, True
 	]),
@@ -147,7 +148,7 @@ def canplace(board, piece_type, x, y, r):
 	)
 
 # decrease the input timer multiplicatively for every 100 points
-input_bucket_max = lambda player_score: 0.85 ** (player_score // 100)
+input_bucket_max = lambda player_score: 0.9 ** (player_score // 100)
 
 class Controls:
 	SOFTDROP = curses.KEY_DOWN
@@ -157,8 +158,6 @@ class Controls:
 	HARDDROP = curses.ascii.SP
 	EXIT = curses.ascii.ESC
 	PAUSE = ord('p')
-
-
 
 def main(stdscr):
 	random.seed(time.time())
@@ -199,7 +198,7 @@ def main(stdscr):
 		elif inp == Controls.RIGHT and canplace(board, piece_current.piece_type, piece_current.x+1, piece_current.y, piece_current.r):
 			piece_current.x += 1
 		elif inp == Controls.ROTATE:
-			for x in [0, -1, -2]:
+			for x in [0, -1, +1]:
 				if canplace(board, piece_current.piece_type, piece_current.x+x, piece_current.y, (piece_current.r+1)%4):
 					piece_current.r = (piece_current.r+1) % 4
 					piece_current.x += x
