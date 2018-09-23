@@ -158,6 +158,7 @@ class Controls:
 	HARDDROP = curses.ascii.SP
 	EXIT = curses.ascii.ESC
 	PAUSE = ord('p')
+key2str = lambda k: curses.ascii.controlnames[k] if k < len(curses.ascii.controlnames) else chr(k).capitalize()
 
 def main(stdscr):
 	random.seed(time.time())
@@ -189,7 +190,7 @@ def main(stdscr):
 		if inp == Controls.EXIT:
 			exit = True
 		elif inp == Controls.PAUSE:
-			board.draw_message(stdscr, 0, 0, ['Paused', 'P to unpause'])
+			board.draw_message(stdscr, 0, 0, ['Paused', key2str(Controls.PAUSE) + ' to unpause'])
 			stdscr.timeout(-1)
 			while stdscr.getch() != Controls.PAUSE:
 				pass
@@ -215,7 +216,7 @@ def main(stdscr):
 				else:
 					for px, py in piece_current:
 						if py < 0:
-							board.draw_message(stdscr, 0, 0, ['Game Over', 'Esc to quit'])
+							board.draw_message(stdscr, 0, 0, ['Game Over', key2str(Controls.EXIT) + ' to quit'])
 							stdscr.timeout(-1)
 							while stdscr.getch() != Controls.EXIT:
 								pass
