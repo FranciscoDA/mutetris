@@ -130,6 +130,13 @@ def canplace(board, piece_type, x, y, r):
 def canmove(board, piece, new_piece_type=None, xoff=0, yoff=0, roff=0):
 	return canplace(board, new_piece_type or piece.piece_type, piece.x+xoff, piece.y+yoff, (piece.r+roff)%4)
 
+def wallkick(board, piece):
+	for r in (1,2):
+		for y in (0, -1, +1):
+			for x in (0, -1, +1):
+				if canmove(board, piece, xoff=x, yoff=y, roff=r):
+					return x, y, r
+
 # decrease the input timer multiplicatively for every 100 points
 input_bucket_max = lambda player_score: 0.9 ** (player_score // 100)
 
@@ -194,12 +201,11 @@ class Game:
 			self.piece_current.x += 1
 			self.piece_shadow = self.cast_shadow(self.piece_current)
 		elif inp == Controls.ROTATE:
-			for x in [0, -1, +1]:
-				if canmove(self.board, self.piece_current, xoff=x, roff=1):
-					self.piece_current.r = (self.piece_current.r+1) % 4
-					self.piece_current.x += x
-					self.piece_shadow = self.cast_shadow(self.piece_current)
-					break
+			x, y, r = wallkick(self.board, self.piece_current)
+			self.piece_current.r = (self.piece_current.r+r) % 4
+			self.piece_current.x += x
+			self.piece_current.y += y
+			self.piece_shadow = self.cast_shadow(self.piece_current)
 		else:
 			max_drop = 0
 			if inp == Controls.SOFTDROP or inp == -1:
