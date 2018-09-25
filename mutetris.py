@@ -152,7 +152,7 @@ class Game:
 		self.piece_current = self.new_piece(random.choice(pieces))
 		self.piece_shadow = copy(self.piece_current)
 		self.drop_piece(self.piece_shadow)
-		self.piece_next = random.choice(pieces)
+		self.piece_next = [random.choice(pieces), random.choice(pieces), random.choice(pieces)]
 		self.input_bucket = 0
 
 	def debug_rotation_system_loop(self, stdscr):
@@ -222,9 +222,10 @@ class Game:
 						self.player_score += self.board.w * multiplier
 						multiplier += 1
 
-				self.piece_current = self.new_piece(self.piece_next)
+				self.piece_current = self.new_piece(self.piece_next[0])
 				self.piece_shadow = self.cast_shadow(self.piece_current)
-				self.piece_next = random.choice(pieces)
+				self.piece_next[0:-1] = self.piece_next[1:]
+				self.piece_next[-1] = random.choice(pieces)
 				self.piece_counter += 1
 				if self.piece_counter % 8 == 0:
 					random.seed(time.time())
@@ -251,14 +252,22 @@ class Game:
 			draw_block(stdscr, x*block_w, y*block_h, None)
 		for x, y in self.piece_current:
 			draw_block(stdscr, x*block_w, y*block_h, self.piece_current.piece_type.col)
-
-		stdscr.addstr(3, self.board.w*block_w+2, 'Next:')
-		for x, y in self.piece_next:
-			draw_block(stdscr, self.board.w * block_w + 2 + x * block_w, 4 + y * block_h, self.piece_next.col)
-
-		stdscr.addstr(12, self.board.w*block_w+2, 'Score: ' + str(self.player_score))
 		stdscr.vline(0, self.board.w*block_w, '|', self.board.h*block_h)
 		stdscr.hline(self.board.h*block_h, 0, '-', self.board.w*block_w)
+
+		stdscr.addstr(0, self.board.w*block_w+2, 'Next:')
+		stdscr.hline(1, self.board.w*block_w+1, '-', 4*block_w)
+		for i,n in enumerate(self.piece_next):
+			for x, y in n:
+				draw_block(stdscr, self.board.w * block_w + 2 + x * block_w, 2 + y * block_h + i * 5 * block_h, n.col)
+			stdscr.hline(2+i*5*block_h+4, self.board.w*block_w+1, '-', 4*block_w)
+		stdscr.vline(0, self.board.w*block_w+1+4*block_w, '|', len(self.piece_next)*5*block_h+1)
+
+		msglen = len('Score: 0000')
+		stdscr.addstr(self.board.h * block_h + 1, self.board.w // 2 * block_w - msglen//2, 'Score: ' + str(self.player_score))
+		stdscr.hline(self.board.h*block_h+2, 0, '-', self.board.w*block_w)
+		stdscr.vline(self.board.h*block_h+1, self.board.w*block_w, '|', 1)
+
 
 	def new_piece(self, piece_type):
 		return Piece(piece_type, self.board.w//2, 0, 0)
