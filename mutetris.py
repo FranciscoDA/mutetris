@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 
+import sys
 import time
 import random
 import curses
@@ -87,7 +88,7 @@ class Piece:
 			yield floor(self.x+x*rotmat[0]+y*rotmat[1]), floor(self.y+x*rotmat[2]+y*rotmat[3])
 
 pieces = [
-	PieceType(1, 4, 0, 2, Colors.red, [
+	PieceType(1, 4, 0.5, 1.5, Colors.red, [
 		True,
 		True,
 		True,
@@ -103,7 +104,7 @@ pieces = [
 		True, False,
 		True, False
 	]),
-	PieceType(2, 2, 0.5, 0.5, Colors.blue, [
+	PieceType(2, 2, .5, .5, Colors.blue, [
 		True, True,
 		True, True
 	]),
@@ -154,7 +155,29 @@ class Game:
 		self.piece_next = random.choice(pieces)
 		self.input_bucket = 0
 
+	def debug_rotation_system_loop(self, stdscr):
+		self.piece_current.x = self.board.w // 2
+		self.piece_current.y = self.board.h // 2
+		self.piece_shadow = self.cast_shadow(self.piece_current)
+		self.draw(stdscr)
+		# draw centroid
+		draw_block(stdscr, self.piece_current.x*block_w, self.piece_current.y*block_h, s='[]', fg=[Colors.white, Colors.white], bgcol=None)
+		inp = stdscr.getch()
+		if inp == Controls.EXIT:
+			self.exit = True
+		elif inp == Controls.SOFTDROP:
+			self.piece_current.piece_type = pieces[(pieces.index(self.piece_current.piece_type)+1)%len(pieces)]
+		elif inp == Controls.ROTATE:
+			self.piece_current.piece_type = pieces[(pieces.index(self.piece_current.piece_type)-1)%len(pieces)]
+		elif inp == Controls.LEFT:
+			self.piece_current.r = (self.piece_current.r-1)%4
+		elif inp == Controls.RIGHT:
+			self.piece_current.r = (self.piece_current.r+1)%4
+		elif inp == Controls.HARDDROP:
+			self.piece_current.r = 0
+
 	def loop(self, stdscr):
+		self.draw(stdscr)
 		t = time.time()
 		stdscr.timeout(max(0, int((self.input_bucket_max()-self.input_bucket)*1000)))
 		inp = stdscr.getch()
@@ -238,7 +261,7 @@ class Game:
 		stdscr.hline(self.board.h*block_h, 0, '-', self.board.w*block_w)
 
 	def new_piece(self, piece_type):
-		return Piece(piece_type, self.board.w//2 - piece_type.w//2, 1-piece_type.h, 0)
+		return Piece(piece_type, self.board.w//2, 0, 0)
 
 	def drop_piece(self, piece, max_drop=-1): # true if not dropped to bottom
 		while max_drop != 0:
@@ -256,7 +279,7 @@ class Game:
 	def input_bucket_max(self):
 		return input_bucket_max(self.player_score if self.piece_current.y < self.piece_shadow.y else 0)
 
-def main(stdscr):
+def main(stdscr, debug=False):
 	random.seed(time.time())
 	curses.start_color()
 	curses.use_default_colors()
@@ -266,11 +289,17 @@ def main(stdscr):
 	curses.curs_set(0)
 	g = Game()
 	while not g.exit:
-		g.draw(stdscr)
-		g.loop(stdscr)
+		if not debug:
+			g.loop(stdscr)
+		else:
+			g.debug_rotation_system_loop(stdscr)
 	return g.player_score
 
 if __name__ == '__main__':
-	player_score = curses.wrapper(main)
-	print('Game Over')
-	print('Final score: ' + str(player_score))
+	if len(sys.argv)==1:
+		player_score = curses.wrapper(main)
+		print('Game Over')
+		print('Final score: ' + str(player_score))
+	elif len(sys.argv)==2 and sys.argv[1] == 'debug':
+		curses.wrapper(main, True)
+
