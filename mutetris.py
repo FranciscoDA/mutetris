@@ -6,6 +6,7 @@ import curses
 import curses.ascii
 from math import floor
 from enum import Enum
+from copy import copy
 
 palette = [curses.COLOR_WHITE, curses.COLOR_BLACK, 10, 220, 12, 13, 14, 9, 202]
 class Colors(Enum):
@@ -120,32 +121,13 @@ pieces = [
 	]),
 ]
 
-def draw(stdscr, board, piece_current, piece_next, player_score):
-	stdscr.erase()
-	shadow_x, shadow_y = piece_current.x, piece_current.y
-	while canplace(board, piece_current.piece_type, shadow_x, shadow_y+1, piece_current.r):
-		shadow_y += 1
-
-	# draw the main area
-	board.draw(stdscr, 0, 0)
-	for x, y in Piece(piece_current.piece_type, shadow_x, shadow_y, piece_current.r):
-		draw_block(stdscr, x*block_w, y*block_h, None)
-	for x, y in piece_current:
-		draw_block(stdscr, x*block_w, y*block_h, piece_current.piece_type.col)
-
-	stdscr.addstr(3, board.w*block_w+2, 'Next:')
-	for x, y in piece_next:
-		draw_block(stdscr, board.w * block_w + 2 + x * block_w, 4 + y * block_h, piece_next.col)
-
-	stdscr.addstr(12, board.w*block_w+2, 'Score: ' + str(player_score))
-	stdscr.vline(0, board.w*block_w, '|', board.h*block_h)
-	stdscr.hline(board.h*block_h, 0, '-', board.w*block_w)
-
 def canplace(board, piece_type, x, y, r):
 	return all(
 		0 <= px < board.w and py < board.h and board.get(px, py) is None
 		for px, py in Piece(piece_type, x, y, r)
 	)
+def canmove(board, piece, new_piece_type=None, xoff=0, yoff=0, roff=0):
+	return canplace(board, new_piece_type or piece.piece_type, piece.x+xoff, piece.y+yoff, (piece.r+roff)%4)
 
 # decrease the input timer multiplicatively for every 100 points
 input_bucket_max = lambda player_score: 0.9 ** (player_score // 100)
@@ -160,87 +142,133 @@ class Controls:
 	PAUSE = ord('p')
 key2str = lambda k: curses.ascii.controlnames[k] if k < len(curses.ascii.controlnames) else chr(k).capitalize()
 
-def main(stdscr):
-	random.seed(time.time())
-	board = Board(10, 20)
-	exit = False
-	curses.start_color()
-	curses.use_default_colors()
-	for fg in Colors:
-		for bg in Colors:
-			curses.init_pair(fg.value*len(palette)+bg.value+1, palette[fg.value], palette[bg.value])
-	curses.curs_set(0)
+class Game:
+	def __init__(self):
+		self.exit = False
+		self.board = Board(10, 20)
+		self.player_score = 0
+		self.piece_counter = 1
+		self.piece_current = self.new_piece(random.choice(pieces))
+		self.piece_shadow = copy(self.piece_current)
+		self.drop_piece(self.piece_shadow)
+		self.piece_next = random.choice(pieces)
+		self.input_bucket = 0
 
-	player_score = 0
-	piece_counter = 1
-
-	piece_current = Piece(random.choice(pieces), board.w//2, 1, 0)
-	piece_current.x -= piece_current.piece_type.w//2
-	piece_current.y -= piece_current.piece_type.h
-	piece_next = random.choice(pieces)
-
-	input_bucket = input_bucket_max(player_score)
-	while not exit:
-		draw(stdscr, board, piece_current, piece_next, player_score)
+	def loop(self, stdscr):
 		t = time.time()
-		stdscr.timeout(max(0, int(input_bucket*1000)))
+		stdscr.timeout(max(0, int((self.input_bucket_max()-self.input_bucket)*1000)))
 		inp = stdscr.getch()
-		# deduct the elapsed time from the bucket
-		input_bucket -= time.time() - t
+		# add the elapsed time to the bucket
+		self.input_bucket += time.time() - t
 		if inp == Controls.EXIT:
-			exit = True
+			self.exit = True
 		elif inp == Controls.PAUSE:
-			board.draw_message(stdscr, 0, 0, ['Paused', key2str(Controls.PAUSE) + ' to unpause'])
-			stdscr.timeout(-1)
-			while stdscr.getch() != Controls.PAUSE:
-				pass
-		elif inp == Controls.LEFT and canplace(board, piece_current.piece_type, piece_current.x-1, piece_current.y, piece_current.r):
-			piece_current.x -= 1
-		elif inp == Controls.RIGHT and canplace(board, piece_current.piece_type, piece_current.x+1, piece_current.y, piece_current.r):
-			piece_current.x += 1
+			self.pause_screen(stdscr)
+		elif inp == Controls.LEFT and canmove(self.board, self.piece_current, xoff=-1):
+			self.piece_current.x -= 1
+			self.piece_shadow = self.cast_shadow(self.piece_current)
+		elif inp == Controls.RIGHT and canmove(self.board, self.piece_current, xoff=+1):
+			self.piece_current.x += 1
+			self.piece_shadow = self.cast_shadow(self.piece_current)
 		elif inp == Controls.ROTATE:
 			for x in [0, -1, +1]:
-				if canplace(board, piece_current.piece_type, piece_current.x+x, piece_current.y, (piece_current.r+1)%4):
-					piece_current.r = (piece_current.r+1) % 4
-					piece_current.x += x
+				if canmove(self.board, self.piece_current, xoff=x, roff=1):
+					self.piece_current.r = (self.piece_current.r+1) % 4
+					self.piece_current.x += x
+					self.piece_shadow = self.cast_shadow(self.piece_current)
 					break
 		else:
 			max_drop = 0
 			if inp == Controls.SOFTDROP or inp == -1:
 				max_drop = 1
 			elif inp == Controls.HARDDROP:
-				max_drop = board.h + piece_current.piece_type.h
-			for _ in range(max_drop):
-				if canplace(board, piece_current.piece_type, piece_current.x, piece_current.y + 1, piece_current.r):
-					piece_current.y += 1
-				else:
-					for px, py in piece_current:
-						if py < 0:
-							board.draw_message(stdscr, 0, 0, ['Game Over', key2str(Controls.EXIT) + ' to quit'])
-							stdscr.timeout(-1)
-							while stdscr.getch() != Controls.EXIT:
-								pass
-							exit = True # game over
-							break
-						board.set(px, py, piece_current.piece_type.col)
-					piece_current = Piece(piece_next, board.w//2 - piece_next.w//2, 1-piece_next.h, 0)
-					piece_next = random.choice(pieces)
-					piece_counter += 1
-					if piece_counter % 8 == 0:
-						random.seed(time.time())
-					multiplier = 1
-					# check for a complete row and clear it
-					for y in range(board.h):
-						if all(board.get(x,y) is not None for x in range(board.w)):
-							board.clear(y)
-							player_score += board.w * multiplier
-							multiplier += 1
-					break
+				max_drop = -1
+			if not self.drop_piece(self.piece_current, max_drop):
+				for px, py in self.piece_current:
+					if py < 0:
+						self.game_over_screen(stdscr)
+						self.exit = True
+						break
+					self.board.set(px, py, self.piece_current.piece_type.col)
+
+				multiplier = 1
+				# check for a complete row and clear it
+				for y in range(self.board.h):
+					if all(self.board.get(x,y) is not None for x in range(self.board.w)):
+						self.board.clear(y)
+						self.player_score += self.board.w * multiplier
+						multiplier += 1
+
+				self.piece_current = self.new_piece(self.piece_next)
+				self.piece_shadow = self.cast_shadow(self.piece_current)
+				self.piece_next = random.choice(pieces)
+				self.piece_counter += 1
+				if self.piece_counter % 8 == 0:
+					random.seed(time.time())
 
 			# reset the bucket after falling one block
 			if max_drop > 0:
-				input_bucket = input_bucket_max(player_score)
-	return player_score
+				self.input_bucket = 0
+
+	def pause_screen(self, stdscr):
+		self.board.draw_message(stdscr, 0, 0, ['Paused', key2str(Controls.PAUSE) + ' to unpause'])
+		stdscr.timeout(-1)
+		while stdscr.getch() != Controls.PAUSE:
+			pass
+	def game_over_screen(self, stdscr):
+		self.board.draw_message(stdscr, 0, 0, ['Game Over', key2str(Controls.EXIT) + ' to quit'])
+		stdscr.timeout(-1)
+		while stdscr.getch() != Controls.EXIT:
+			pass
+
+	def draw(self, stdscr):
+		stdscr.erase()
+		self.board.draw(stdscr, 0, 0)
+		for x, y in self.piece_shadow:
+			draw_block(stdscr, x*block_w, y*block_h, None)
+		for x, y in self.piece_current:
+			draw_block(stdscr, x*block_w, y*block_h, self.piece_current.piece_type.col)
+
+		stdscr.addstr(3, self.board.w*block_w+2, 'Next:')
+		for x, y in self.piece_next:
+			draw_block(stdscr, self.board.w * block_w + 2 + x * block_w, 4 + y * block_h, self.piece_next.col)
+
+		stdscr.addstr(12, self.board.w*block_w+2, 'Score: ' + str(self.player_score))
+		stdscr.vline(0, self.board.w*block_w, '|', self.board.h*block_h)
+		stdscr.hline(self.board.h*block_h, 0, '-', self.board.w*block_w)
+
+	def new_piece(self, piece_type):
+		return Piece(piece_type, self.board.w//2 - piece_type.w//2, 1-piece_type.h, 0)
+
+	def drop_piece(self, piece, max_drop=-1): # true if not dropped to bottom
+		while max_drop != 0:
+			if canmove(self.board, piece, yoff=+1):
+				piece.y += 1
+				max_drop -= 1
+			else:
+				return False
+		return True
+	def cast_shadow(self, piece):
+		s = copy(piece)
+		self.drop_piece(s)
+		return s
+
+	def input_bucket_max(self):
+		return input_bucket_max(self.player_score if self.piece_current.y < self.piece_shadow.y else 0)
+
+def main(stdscr):
+	random.seed(time.time())
+	curses.start_color()
+	curses.use_default_colors()
+	for fg in Colors:
+		for bg in Colors:
+			curses.init_pair(fg.value*len(palette)+bg.value+1, palette[fg.value], palette[bg.value])
+	curses.curs_set(0)
+	g = Game()
+	while not g.exit:
+		g.draw(stdscr)
+		g.loop(stdscr)
+	return g.player_score
 
 if __name__ == '__main__':
 	player_score = curses.wrapper(main)
